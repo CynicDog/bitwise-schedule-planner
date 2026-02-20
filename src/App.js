@@ -1,8 +1,7 @@
 import "./App.css";
 import { useEffect, useState, useMemo, useRef } from "react";
-import { loadRepository } from "./api/loadRepository";
-import { joinRepository } from "./scheduler/joinRepository";
-import { simulateRuns } from "./scheduler/simulateRuns";
+import { loadRepository, joinRepository } from "./data/repository";
+import { projectRuns } from "./logic/project";
 
 const getTheme = (isDark) => ({
     primary: "#6366F1",
@@ -138,7 +137,7 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (joined.length) setRuns(simulateRuns(joined, horizon));
+        if (joined.length) setRuns(projectRuns(joined, horizon));
     }, [joined, horizon]);
 
     const workflowList = useMemo(() => [...new Set(runs.map(r => r.workflow))].sort(), [runs]);
