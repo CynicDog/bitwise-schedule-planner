@@ -2,20 +2,21 @@ import { RRule } from "rrule";
 import { convertToRRule } from "./define";
 
 /**
- * Simulate workflow runs until a given horizon date.
+ * Simulate workflow runs inside a time window.
  *
- * @param {Array} joined - joined workflow + schedule data
- * @param {Date | string} horizon - simulation end date
+ * @param {Array} joined
+ * @param {Date | string} from
+ * @param {Date | string} until
  */
-export function projectRuns(joined, horizon) {
+export function projectRuns(joined, from, until) {
 
     const results = [];
 
-    const now = new Date();
+    const windowStart =
+        from instanceof Date ? from : new Date(from);
+
     const windowEnd =
-        horizon instanceof Date
-            ? horizon
-            : new Date(horizon);
+        until instanceof Date ? until : new Date(until);
 
     joined.forEach(({ workflow, schedule }) => {
 
@@ -32,7 +33,7 @@ export function projectRuns(joined, horizon) {
          * END_OPTIONS
          * 0 → until END_TIME
          * 1 → limit by RUN_COUNT
-         * 2 → infinite (we restrict by horizon)
+         * 2 → infinite (we restrict by windowEnd)
          */
 
         if (endOptions === 0 && endTimeRaw) {
@@ -47,18 +48,15 @@ export function projectRuns(joined, horizon) {
         }
 
         if (endOptions === 2) {
-            // Infinite → restrict to horizon
             ruleConfig.until = windowEnd;
         }
 
         const rule = new RRule(ruleConfig);
         const frequencyText = new RRule(ruleData).toText();
 
-        /**
-         * Generate only occurrences inside window
-         */
+        // 🔥 THIS IS THE KEY CHANGE
         const occurrences = rule.between(
-            now,
+            windowStart,
             windowEnd,
             true
         );
