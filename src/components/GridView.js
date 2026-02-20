@@ -1,7 +1,5 @@
 import ScheduleCanvas from "./ScheduleCanvas";
 
-const HEADER_HEIGHT = 40;
-
 const GridView = ({
                       theme,
                       isDark,
@@ -13,6 +11,30 @@ const GridView = ({
                       selectedIndex,
                       setSelectedIndex
                   }) => {
+
+    const HEADER_HEIGHT =
+        view === "30min" || view === "hour" ? 50 : 40;
+
+    const isTimeView = view === "30min" || view === "hour";
+
+    const pad = (n) => String(n).padStart(2, "0");
+
+    // Normalize to pure calendar date (critical)
+    const normalizeCalendarDate = (d) => {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    };
+
+    const getParts = (date) => {
+        const d = normalizeCalendarDate(date);
+        return {
+            year: d.getFullYear(),
+            month: d.getMonth() + 1,
+            day: d.getDate(),
+            hour: date.getHours(),
+            minute: date.getMinutes()
+        };
+    };
+
     return (
         <div
             style={{
@@ -25,6 +47,8 @@ const GridView = ({
             }}
         >
             <div style={{ display: "flex", minWidth: "max-content" }}>
+
+                {/* LEFT WORKFLOW COLUMN */}
                 <div
                     style={{
                         position: "sticky",
@@ -36,7 +60,6 @@ const GridView = ({
                             : "2px 0 5px rgba(0,0,0,0.05)"
                     }}
                 >
-                    {/* TOP-LEFT CORNER CELL (CRITICAL) */}
                     <div
                         style={{
                             position: "sticky",
@@ -58,7 +81,6 @@ const GridView = ({
                         Workflow ({workflowList.length})
                     </div>
 
-                    {/* WORKFLOW ROWS */}
                     {workflowList.map((wf, i) => (
                         <div
                             key={wf}
@@ -93,13 +115,11 @@ const GridView = ({
                         </div>
                     ))}
                 </div>
-                <div
-                    style={{
-                        position: "relative",
-                        alignSelf: "flex-start"
-                    }}
-                >
-                    {/* STICKY TIMELINE HEADER */}
+
+                {/* RIGHT GRID */}
+                <div style={{ position: "relative", alignSelf: "flex-start" }}>
+
+                    {/* TIMELINE HEADER */}
                     <div
                         style={{
                             display: "flex",
@@ -110,48 +130,84 @@ const GridView = ({
                             borderBottom: `1px solid ${theme.border}`
                         }}
                     >
-                        {timeline.map((slot, i) => (
-                            <div
-                                key={i}
-                                style={{
-                                    width: theme.slotWidth,
-                                    height: HEADER_HEIGHT,
-                                    borderRight: `1px solid ${theme.border}44`,
-                                    position: "relative",
-                                    flexShrink: 0,
-                                    boxSizing: "border-box"
-                                }}
-                            >
+                        {timeline.map((slot, i) => {
+
+                            const { month, day, hour, minute } = getParts(slot);
+
+                            const isMidnight = hour === 0 && minute === 0;
+                            const isFirstOfMonth = day === 1;
+
+                            let label;
+
+                            if (view === "30min") {
+                                label = `${pad(hour)}:${pad(minute)}`;
+                            }
+                            else if (view === "hour") {
+                                label = `${pad(hour)}:00`;
+                            }
+                            else if (view === "day" || view === "week") {
+                                label = `${month}/${day}`;
+                            }
+                            else if (view === "month") {
+                                label = `${month}/${day}`;
+                            }
+
+                            const dateMarker = `${month}/${day}`;
+
+                            return (
                                 <div
+                                    key={i}
                                     style={{
-                                        position: "absolute",
-                                        bottom: "6px",
-                                        left: "50%",
-                                        transform:
-                                            "translateX(-30%) rotate(-45deg)",
-                                        transformOrigin: "bottom left",
-                                        fontSize: "9px",
-                                        fontWeight: "bold",
-                                        color: theme.textMuted,
-                                        whiteSpace: "nowrap",
-                                        pointerEvents: "none"
+                                        width: theme.slotWidth,
+                                        height: HEADER_HEIGHT,
+                                        borderLeft:
+                                            isTimeView && isMidnight
+                                                ? `2px solid ${theme.border}`
+                                                : `1px solid ${theme.border}44`,
+                                        position: "relative",
+                                        flexShrink: 0,
+                                        boxSizing: "border-box"
                                     }}
                                 >
-                                    {view === "30min"
-                                        ? `${slot.getHours()}:${
-                                            slot.getMinutes() === 0
-                                                ? "00"
-                                                : "30"
-                                        }`
-                                        : view === "hour"
-                                            ? `${slot.getHours()}:00`
-                                            : `${slot.getMonth() + 1}/${slot.getDate()}`}
+                                    {isTimeView && isMidnight && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                top: "3px",
+                                                left: "50%",
+                                                transform: "translateX(-50%)",
+                                                fontSize: "10px",
+                                                fontWeight: 700,
+                                                color: theme.primary,
+                                                whiteSpace: "nowrap",
+                                                pointerEvents: "none"
+                                            }}
+                                        >
+                                            {dateMarker}
+                                        </div>
+                                    )}
+
+                                    <div
+                                        style={{
+                                            position: "absolute",
+                                            bottom: "6px",
+                                            left: "50%",
+                                            transform: "translateX(-30%) rotate(-45deg)",
+                                            transformOrigin: "bottom left",
+                                            fontSize: isFirstOfMonth ? "10px" : "9px",
+                                            fontWeight: isFirstOfMonth ? 800 : 700,
+                                            color: isFirstOfMonth ? theme.primary : theme.textMain,
+                                            whiteSpace: "nowrap",
+                                            pointerEvents: "none"
+                                        }}
+                                    >
+                                        {label}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
-                    {/* CANVAS BODY */}
                     <ScheduleCanvas
                         timeline={timeline}
                         workflows={workflowList}

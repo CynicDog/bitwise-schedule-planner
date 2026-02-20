@@ -58,11 +58,44 @@ function App() {
 
     const subjectColors = useMemo(() => {
         const map = {};
-        const palette = ["#6366F1", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#14B8A6"];
+
+        // Modern scheduler categorical palette (24 distinct hues)
+        const palette = [
+            "#5B8FF9", // blue
+            "#61DDAA", // mint
+            "#65789B", // steel
+            "#F6BD16", // amber
+            "#7262FD", // indigo
+            "#78D3F8", // sky
+            "#9661BC", // purple
+            "#F6903D", // orange
+            "#008685", // teal
+            "#F08BB4", // pink
+            "#3CC2D8", // aqua
+            "#D3C6EA", // lavender
+            "#6DC8EC", // light blue
+            "#FF99C3", // rose
+            "#B6E880", // lime
+            "#FFB55A", // soft orange
+            "#9A6BFF", // violet
+            "#36B37E", // emerald
+            "#FF6B6B", // coral
+            "#4C9AFF", // azure
+            "#00B8D9", // cyan
+            "#6554C0", // deep indigo
+            "#FF8F73", // peach
+            "#A0AEC0"  // neutral slate
+        ];
+
         let i = 0;
+
         runs.forEach((r) => {
-            if (!map[r.subject]) { map[r.subject] = palette[i % palette.length]; i++; }
+            if (!map[r.subject]) {
+                map[r.subject] = palette[i % palette.length];
+                i++;
+            }
         });
+
         return map;
     }, [runs]);
 
