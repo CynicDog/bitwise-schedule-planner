@@ -122,9 +122,6 @@ const Controls = ({
             {/* LEFT SIDE CONTROLS */}
             <div style={leftGroup}>
 
-                {/* TITLE */}
-                <h2 style={titleStyle}>Informatica Scheduler</h2>
-
                 {/* MODE SWITCH */}
                 <div style={panel}>
                     <div style={segmentGroup}>
