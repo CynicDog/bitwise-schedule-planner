@@ -4,9 +4,9 @@ import { loadRepository } from "./api/loadRepository";
 import { joinRepository } from "./scheduler/joinRepository";
 import { simulateRuns } from "./scheduler/simulateRuns";
 
-// Helper to get theme colors based on mode
 const getTheme = (isDark) => ({
     primary: "#6366F1",
+    highlightBg: isDark ? "rgba(99, 102, 241, 0.2)" : "rgba(99, 102, 241, 0.1)",
     bg: isDark ? "#0F172A" : "#F8FAFC",
     cardBg: isDark ? "#1E293B" : "#FFFFFF",
     headerBg: isDark ? "#334155" : "#F1F5F9",
@@ -19,8 +19,7 @@ const getTheme = (isDark) => ({
     rowHeight: 32,
 });
 
-/* ================= CANVAS COMPONENT ================= */
-const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isDark }) => {
+const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isDark, selectedIndex }) => {
     const canvasRef = useRef(null);
     const theme = getTheme(isDark);
 
@@ -49,9 +48,12 @@ const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isD
 
         const timelineStart = timeline[0];
 
-        // 1. Draw Grid Background & Zebra Stripes
         workflows.forEach((_, i) => {
-            ctx.fillStyle = i % 2 === 0 ? theme.zebra : theme.cardBg;
+            if (i === selectedIndex) {
+                ctx.fillStyle = theme.highlightBg;
+            } else {
+                ctx.fillStyle = i % 2 === 0 ? theme.zebra : theme.cardBg;
+            }
             ctx.fillRect(0, i * theme.rowHeight, width, theme.rowHeight);
 
             ctx.strokeStyle = `${theme.border}88`;
@@ -62,7 +64,6 @@ const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isD
             ctx.stroke();
         });
 
-        // 2. Draw Column Dividers (Fixed with 0.5 offset for alignment)
         ctx.strokeStyle = `${theme.border}44`;
         ctx.lineWidth = 1;
         timeline.forEach((_, i) => {
@@ -73,7 +74,6 @@ const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isD
             ctx.stroke();
         });
 
-        // 3. Draw Scheduled Runs
         workflows.forEach((wf, rowIndex) => {
             const runs = grouped[wf] || [];
             runs.forEach(run => {
@@ -105,7 +105,7 @@ const ScheduleCanvas = ({ timeline, workflows, grouped, subjectColors, view, isD
                 }
             });
         });
-    }, [timeline, workflows, grouped, subjectColors, view, isDark, theme]);
+    }, [timeline, workflows, grouped, subjectColors, view, isDark, theme, selectedIndex]);
 
     return <canvas ref={canvasRef} style={{ display: "block" }} />;
 };
@@ -118,6 +118,7 @@ function App() {
     const [joined, setJoined] = useState([]);
     const [view, setView] = useState("hour");
     const [mode, setMode] = useState("grid");
+    const [selectedIndex, setSelectedIndex] = useState(null);
     const [horizon, setHorizon] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() + 7);
@@ -218,7 +219,6 @@ function App() {
                         </div>
                     )}
 
-                    {/* DATE PICKER (Horizon) */}
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span style={{ fontSize: "11px", color: theme.textMuted, fontWeight: "bold" }}>Until :</span>
                         <input
@@ -259,15 +259,21 @@ function App() {
                             }}>Workflow ({workflowList.length})</div>
 
                             {workflowList.map((wf, i) => (
-                                <div key={wf} style={{
-                                    width: theme.workflowWidth, height: theme.rowHeight,
-                                    backgroundColor: i % 2 === 0 ? theme.zebra : theme.cardBg,
-                                    borderRight: `2px solid ${theme.border}`,
-                                    display: "flex", alignItems: "center", padding: "0 12px",
-                                    fontSize: "11px", color: theme.textMain,
-                                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                                    boxSizing: "border-box"
-                                }}>{wf}</div>
+                                <div
+                                    key={wf}
+                                    onClick={() => setSelectedIndex(i)}
+                                    style={{
+                                        width: theme.workflowWidth, height: theme.rowHeight,
+                                        backgroundColor: selectedIndex === i ? theme.highlightBg : (i % 2 === 0 ? theme.zebra : theme.cardBg),
+                                        borderRight: `2px solid ${theme.border}`,
+                                        display: "flex", alignItems: "center", padding: "0 12px",
+                                        fontSize: "11px", color: theme.textMain,
+                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                        boxSizing: "border-box",
+                                        cursor: "pointer",
+                                        borderLeft: selectedIndex === i ? `4px solid ${theme.primary}` : 'none'
+                                    }}
+                                >{wf}</div>
                             ))}
                         </div>
 
@@ -309,6 +315,7 @@ function App() {
                                 subjectColors={subjectColors}
                                 view={view}
                                 isDark={isDark}
+                                selectedIndex={selectedIndex}
                             />
                         </div>
                     </div>
@@ -327,16 +334,33 @@ function App() {
                         </tr>
                         </thead>
                         <tbody>
-                        {runs.slice(0, 500).map((r, i) => (
-                            <tr key={i} style={{ borderBottom: `1px solid ${theme.border}44`, background: i % 2 === 0 ? theme.zebra : theme.cardBg }}>
-                                <td style={{ padding: "12px", fontWeight: "600" }}>{r.workflow}</td>
-                                <td style={{ padding: "12px" }}>
-                                    <span style={{ padding: "2px 8px", borderRadius: "4px", color: "#FFF", fontSize: "10px", fontWeight: "bold", background: subjectColors[r.subject] }}>{r.subject}</span>
-                                </td>
-                                <td style={{ padding: "12px", color: theme.textMuted }}>{r.frequency}</td>
-                                <td style={{ padding: "12px" }}>{new Date(r.runTime).toLocaleString()}</td>
-                            </tr>
-                        ))}
+                        {runs.slice(0, 500).map((r, i) => {
+                            const masterIndex = workflowList.indexOf(r.workflow);
+                            const isSelected = selectedIndex === masterIndex;
+
+                            return (
+                                <tr
+                                    key={i}
+                                    onClick={() => setSelectedIndex(masterIndex)}
+                                    style={{
+                                        borderBottom: `1px solid ${theme.border}44`,
+                                        background: isSelected ? theme.highlightBg : (i % 2 === 0 ? theme.zebra : theme.cardBg),
+                                        cursor: "pointer",
+                                        transition: "background 0.2s ease"
+                                    }}
+                                >
+                                    <td style={{ padding: "12px", fontWeight: "600", position: 'relative' }}>
+                                        {isSelected && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: theme.primary }} />}
+                                        {r.workflow}
+                                    </td>
+                                    <td style={{ padding: "12px" }}>
+                                        <span style={{ padding: "2px 8px", borderRadius: "4px", color: "#FFF", fontSize: "10px", fontWeight: "bold", background: subjectColors[r.subject] }}>{r.subject}</span>
+                                    </td>
+                                    <td style={{ padding: "12px", color: theme.textMuted }}>{r.frequency}</td>
+                                    <td style={{ padding: "12px" }}>{new Date(r.runTime).toLocaleString()}</td>
+                                </tr>
+                            );
+                        })}
                         </tbody>
                     </table>
                 </div>
