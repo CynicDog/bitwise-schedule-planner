@@ -12,11 +12,10 @@ export function projectRuns(joined, from, until) {
 
     const results = [];
 
-    const windowStart =
-        from instanceof Date ? from : new Date(from);
+    const windowStart = from instanceof Date ? from : new Date(from);
+    const windowEnd = until instanceof Date ? until : new Date(until);
 
-    const windowEnd =
-        until instanceof Date ? until : new Date(until);
+    windowEnd.setMilliseconds(999);
 
     joined.forEach(({ workflow, schedule }) => {
 
@@ -53,8 +52,6 @@ export function projectRuns(joined, from, until) {
 
         const rule = new RRule(ruleConfig);
         const frequencyText = new RRule(ruleData).toText();
-
-        // 🔥 THIS IS THE KEY CHANGE
         const occurrences = rule.between(
             windowStart,
             windowEnd,

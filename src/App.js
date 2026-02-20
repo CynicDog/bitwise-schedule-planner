@@ -71,7 +71,7 @@ function App() {
 
         setFrom(start);
         setUntil(end);
-    }, [view]);
+    }, []);
 
     // Load Data
     useEffect(() => {
@@ -92,6 +92,8 @@ function App() {
     // Normalization logic for projection boundaries
     const normalizedRange = useMemo(() => {
         const nFrom = new Date(from);
+        nFrom.setSeconds(0, 0);
+
         const nUntil = new Date(until);
 
         if (view === "day" || view === "week" || view === "month") {
@@ -102,7 +104,7 @@ function App() {
             nUntil.setSeconds(59, 999);
         }
         return { start: nFrom, end: nUntil };
-    }, [from, until, view]);
+    }, [from, until]);
 
     // Apply projection
     useEffect(() => {

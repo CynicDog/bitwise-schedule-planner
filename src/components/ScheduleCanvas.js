@@ -15,10 +15,13 @@ const ScheduleCanvas = ({
 
     const getSlotIndex = (runDate, view, timelineStart) => {
         const diffMs = runDate.getTime() - timelineStart.getTime();
-        if (view === "30min") return Math.round(diffMs / (30 * 60000));
-        if (view === "hour") return Math.round(diffMs / (60 * 60000));
-        if (view === "day") return Math.round(diffMs / (24 * 60 * 60000));
-        return -1;
+        let index = -1;
+
+        if (view === "30min") index = Math.floor(diffMs / (30 * 60000));
+        else if (view === "hour") index = Math.floor(diffMs / (60 * 60000));
+        else if (view === "day") index = Math.floor(diffMs / (24 * 60 * 60000));
+
+        return index;
     };
 
     useEffect(() => {
