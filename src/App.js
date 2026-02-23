@@ -3,9 +3,11 @@ import { useEffect, useState, useMemo } from "react";
 import { loadRepository, joinRepository } from "./data/repository";
 import { projectRuns } from "./logic/project";
 
+// Components
 import Controls from "./components/Controls";
 import GridView from "./components/GridView";
 import TableView from "./components/TableView";
+import DetailsPanel from "./components/DetailsPanel";
 
 const getTheme = (isDark) => ({
     primary: "#6366F1",
@@ -35,42 +37,36 @@ function App() {
 
     const [from, setFrom] = useState(new Date());
     const [until, setUntil] = useState(new Date());
-
     const [tableSearch, setTableSearch] = useState("");
 
+    /* --------------------------------------------------
+       WINDOW MGMT
+    -------------------------------------------------- */
     useEffect(() => {
         const now = new Date();
         const start = new Date(now);
         const end = new Date(now);
 
         switch (view) {
-            case "30min":
-                end.setMinutes(end.getMinutes() + 1800);
-                break;
-            case "hour":
-                end.setHours(end.getHours() + 23);
-                break;
-            case "day":
-                end.setDate(end.getDate() + 7);
-                break;
-            case "week":
-                end.setDate(end.getDate() + 21);
-                break;
-            case "month":
-                end.setMonth(end.getMonth() + 2);
-                break;
-            default:
-                end.setHours(end.getHours() + 1);
+            case "30min": end.setMinutes(end.getMinutes() + 1800); break;
+            case "hour": end.setHours(end.getHours() + 23); break;
+            case "day": end.setDate(end.getDate() + 7); break;
+            case "week": end.setDate(end.getDate() + 21); break;
+            case "month": end.setMonth(end.getMonth() + 2); break;
+            default: end.setHours(end.getHours() + 1);
         }
-
         setFrom(start);
         setUntil(end);
     }, [view]);
 
+    /* --------------------------------------------------
+       INITIAL LOAD
+    -------------------------------------------------- */
     useEffect(() => {
         async function init() {
             try {
                 const repo = await loadRepository();
+                // This now uses the V_IFM_MT_INTG_INFO.csv logic
                 const joinedData = joinRepository(repo);
                 setJoined(joinedData);
             } catch (e) {
@@ -86,7 +82,6 @@ function App() {
         const nFrom = new Date(from);
         nFrom.setSeconds(0, 0);
         const nUntil = new Date(until);
-
         if (view === "day" || view === "week" || view === "month") {
             nFrom.setHours(0, 0, 0, 0);
             nUntil.setHours(23, 59, 59, 999);
@@ -94,24 +89,20 @@ function App() {
             nFrom.setSeconds(0, 0);
             nUntil.setSeconds(59, 999);
         }
-
         return { start: nFrom, end: nUntil };
     }, [from, until, view]);
 
+    /* --------------------------------------------------
+       FILTERING & PROJECTION
+    -------------------------------------------------- */
     const filteredWorkflows = useMemo(() => {
         if (!tableSearch.trim()) return joined;
-
         const term = tableSearch.toLowerCase();
         return joined.filter(wf => {
             const workflowName = (wf.workflow?.WORKFLOW_NAME || "").toLowerCase();
             const sources = (wf.Sources || "").toLowerCase();
             const targets = (wf.Targets || "").toLowerCase();
-
-            return (
-                workflowName.includes(term) ||
-                sources.includes(term) ||
-                targets.includes(term)
-            );
+            return workflowName.includes(term) || sources.includes(term) || targets.includes(term);
         });
     }, [joined, tableSearch]);
 
@@ -120,38 +111,29 @@ function App() {
             setRuns([]);
             return;
         }
-
-        const projected = projectRuns(
-            filteredWorkflows,
-            normalizedRange.start,
-            normalizedRange.end
-        );
-
+        // projectRuns calculates the execution dots
+        const projected = projectRuns(filteredWorkflows, normalizedRange.start, normalizedRange.end);
         setRuns(projected);
     }, [filteredWorkflows, normalizedRange]);
 
+    /* --------------------------------------------------
+       GRID DATA PREP
+    -------------------------------------------------- */
     const timeline = useMemo(() => {
         const slots = [];
         const cursor = new Date(normalizedRange.start);
-
-        if (view === "30min") {
-            cursor.setMinutes(Math.floor(cursor.getMinutes() / 30) * 30);
-        } else if (view === "hour") {
-            cursor.setMinutes(0);
-        }
+        if (view === "30min") cursor.setMinutes(Math.floor(cursor.getMinutes() / 30) * 30);
+        else if (view === "hour") cursor.setMinutes(0);
 
         while (cursor <= normalizedRange.end) {
             slots.push(new Date(cursor));
-
             if (view === "30min") cursor.setMinutes(cursor.getMinutes() + 30);
             else if (view === "hour") cursor.setHours(cursor.getHours() + 1);
             else if (view === "day") cursor.setDate(cursor.getDate() + 1);
             else if (view === "week") cursor.setDate(cursor.getDate() + 7);
             else if (view === "month") cursor.setMonth(cursor.getMonth() + 1);
-
             if (slots.length > 5000) break;
         }
-
         return slots;
     }, [normalizedRange, view]);
 
@@ -163,94 +145,106 @@ function App() {
         const map = {};
         runs.forEach((r) => {
             if (!map[r.workflow]) map[r.workflow] = [];
-            map[r.workflow].push({
-                date: new Date(r.runTime),
-                subject: r.subject
-            });
+            map[r.workflow].push({ date: new Date(r.runTime), subject: r.subject });
         });
         return map;
     }, [runs]);
 
     const subjectColors = useMemo(() => {
         const map = {};
-        const palette = [
-            "#5B8FF9", "#61DDAA", "#65789B", "#F6BD16", "#7262FD", "#78D3F8",
-            "#9661BC", "#F6903D", "#008685", "#F08BB4", "#3CC2D8", "#D3C6EA",
-            "#6DC8EC", "#FF99C3", "#B6E880", "#FFB55A", "#9A6BFF", "#36B37E",
-            "#FF6B6B", "#4C9AFF", "#00B8D9", "#6554C0", "#FF8F73", "#A0AEC0"
-        ];
-
+        const palette = ["#5B8FF9", "#61DDAA", "#65789B", "#F6BD16", "#7262FD", "#78D3F8", "#9661BC", "#F6903D"];
         let i = 0;
         runs.forEach((r) => {
-            if (!map[r.subject]) {
-                map[r.subject] = palette[i % palette.length];
-                i++;
-            }
+            if (!map[r.subject]) { map[r.subject] = palette[i % palette.length]; i++; }
         });
         return map;
     }, [runs]);
 
-    if (loading)
-        return (
-            <div style={{
-                padding: 40,
-                color: theme.textMain,
-                background: theme.bg,
-                minHeight: "100vh"
-            }}>
-                Loading repository...
-            </div>
-        );
+    /* --------------------------------------------------
+       DETAILS PANEL SELECTION
+    -------------------------------------------------- */
+    const selectedWorkflowData = useMemo(() => {
+        if (selectedIndex === null || !workflowList[selectedIndex]) return null;
+        const name = workflowList[selectedIndex];
+        // We find the enriched record from the 'joined' pool
+        return joined.find(j => j.workflow.WORKFLOW_NAME === name);
+    }, [selectedIndex, workflowList, joined]);
+
+    if (loading) return (
+        <div style={{ padding: 40, color: theme.textMain, background: theme.bg, minHeight: "100vh" }}>
+            Loading Informatics Metadata Repository...
+        </div>
+    );
 
     return (
-        <div style={{
-            backgroundColor: theme.bg,
-            minHeight: "100vh",
-            padding: "20px",
-            color: theme.textMain,
-            fontFamily: "Inter, system-ui, sans-serif"
-        }}>
-
+        <div style={{ backgroundColor: theme.bg, minHeight: "100vh", padding: "20px", color: theme.textMain, fontFamily: "Inter, sans-serif" }}>
             <Controls
-                isDark={isDark}
-                setIsDark={setIsDark}
-                mode={mode}
-                setMode={setMode}
-                view={view}
-                setView={setView}
-                from={from}
-                setFrom={setFrom}
-                until={until}
-                setUntil={setUntil}
-                theme={theme}
-                workflowCount={filteredWorkflows.length}
-                tableSearch={tableSearch}
-                setTableSearch={setTableSearch}
+                isDark={isDark} setIsDark={setIsDark}
+                mode={mode} setMode={setMode}
+                view={view} setView={setView}
+                from={from} setFrom={setFrom}
+                until={until} setUntil={setUntil}
+                theme={theme} workflowCount={filteredWorkflows.length}
+                tableSearch={tableSearch} setTableSearch={setTableSearch}
             />
 
-            {mode === "grid" ? (
-                <GridView
-                    theme={theme}
-                    isDark={isDark}
-                    workflowList={workflowList}
-                    timeline={timeline}
-                    view={view}
-                    grouped={grouped}
-                    subjectColors={subjectColors}
-                    selectedIndex={selectedIndex}
-                    setSelectedIndex={setSelectedIndex}
-                />
-            ) : (
-                <TableView
-                    runs={runs}
-                    workflowList={workflowList}
-                    selectedIndex={selectedIndex}
-                    setSelectedIndex={setSelectedIndex}
-                    subjectColors={subjectColors}
-                    theme={theme}
-                />
-            )}
+            <div style={{ display: "flex", gap: "20px", width: "100%", alignItems: "flex-start" }}>
+                {/* 9/12 Column System (Left Side) */}
+                <div style={{
+                    flex: selectedIndex !== null ? 9 : 12,
+                    transition: "flex 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                    minWidth: 0,
+                    overflow: "hidden"
+                }}>
+                    {mode === "grid" ? (
+                        <GridView
+                            theme={theme} isDark={isDark}
+                            workflowList={workflowList}
+                            timeline={timeline}
+                            view={view}
+                            grouped={grouped}
+                            subjectColors={subjectColors}
+                            selectedIndex={selectedIndex}
+                            setSelectedIndex={setSelectedIndex}
+                        />
+                    ) : (
+                        <TableView
+                            runs={runs}
+                            workflowList={workflowList}
+                            selectedIndex={selectedIndex}
+                            setSelectedIndex={setSelectedIndex}
+                            subjectColors={subjectColors}
+                            theme={theme}
+                        />
+                    )}
+                </div>
 
+                {/* 3/12 Column System (Right Side Details) */}
+                {selectedIndex !== null && (
+                    <div style={{
+                        flex: 3,
+                        minWidth: "350px",
+                        position: "sticky",
+                        top: "20px",
+                        maxHeight: "calc(100vh - 40px)",
+                        animation: "slideIn 0.3s ease-out"
+                    }}>
+                        <DetailsPanel
+                            data={selectedWorkflowData}
+                            theme={theme}
+                            isDark={isDark}
+                            onClose={() => setSelectedIndex(null)}
+                        />
+                    </div>
+                )}
+            </div>
+
+            <style>{`
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateX(30px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+            `}</style>
         </div>
     );
 }

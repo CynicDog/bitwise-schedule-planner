@@ -3,7 +3,6 @@ import Papa from "papaparse";
 /* --------------------------------------------------
    CSV LOADER
 -------------------------------------------------- */
-
 async function loadCsv(path) {
   const response = await fetch(path);
   const text = await response.text();
@@ -17,106 +16,82 @@ async function loadCsv(path) {
 }
 
 /* --------------------------------------------------
-   LOAD ALL REPOSITORY CSVs
+   LOAD REPOSITORY CSVs
 -------------------------------------------------- */
-
 export async function loadRepository() {
-
   const [
     workflows,
     schedules,
-    sessions,
-    mappings,
-    sessionMappingBridge
+    integrationView
   ] = await Promise.all([
     loadCsv("/data/REP_WORKFLOWS.csv"),
     loadCsv("/data/OPB_SCHEDULE_LOGIC.csv"),
-    loadCsv("/data/REP_SESSION_INSTANCES.csv"),
-    loadCsv("/data/REP_TBL_MAPPING.csv"),
-    loadCsv("/data/OPB_SESSION_MAPPING.csv")
+    loadCsv("/data/V_IFM_MT_INTG_INFO.csv") // Our new consolidated view
   ]);
 
   return {
     workflows,
     schedules,
-    sessions,
-    mappings,
-    sessionMappingBridge
+    integrationView
   };
 }
 
+/* --------------------------------------------------
+   JOIN REPOSITORY
+-------------------------------------------------- */
 export function joinRepository(repo) {
+  const { workflows, schedules, integrationView } = repo;
 
-  const {
-    workflows,
-    schedules,
-    sessions,
-    mappings,
-    sessionMappingBridge
-  } = repo;
-
+  // 1. Map Schedules by SCHEDULER_ID for O(1) lookup
   const scheduleMap = new Map();
   schedules.forEach(s => {
     scheduleMap.set(String(s.SCHEDULER_ID), s);
   });
 
-  const workflowSessionsMap = new Map();
-
-  sessions.forEach(sess => {
-    const wfId = String(sess.WORKFLOW_ID);
-
-    if (!workflowSessionsMap.has(wfId)) {
-      workflowSessionsMap.set(wfId, []);
+  // 2. Group Integration View records by WORKFLOW_ID
+  // Since one workflow has many sessions/tables, we group them into arrays
+  const intgMap = new Map();
+  integrationView.forEach(row => {
+    const wfId = String(row.WORKFLOW_ID);
+    if (!intgMap.has(wfId)) {
+      intgMap.set(wfId, []);
     }
-
-    workflowSessionsMap.get(wfId).push(sess);
+    intgMap.get(wfId).push(row);
   });
 
-  const sessionToMappingMap = new Map();
-
-  sessionMappingBridge.forEach(row => {
-    sessionToMappingMap.set(
-      String(row.SESSION_ID),
-      String(row.MAPPING_ID)
-    );
-  });
-
-  const mappingMap = new Map();
-  mappings.forEach(m => {
-    mappingMap.set(String(m.MAPPING_ID), m);
-  });
-
+  // 3. Construct the Final Enriched Workflow Object
   return workflows.map(wf => {
-
     const wfId = String(wf.WORKFLOW_ID);
-    const wfSessions = workflowSessionsMap.get(wfId) || [];
+    const relatedRecords = intgMap.get(wfId) || [];
 
+    // Extract unique values for the UI
     const sourceSet = new Set();
     const targetSet = new Set();
+    const sessionSet = new Set();
+    const loadTypes = new Set();
 
-    wfSessions.forEach(sess => {
-
-      const mappingId = sessionToMappingMap.get(String(sess.SESSION_ID));
-      if (!mappingId) return;
-
-      const mapping = mappingMap.get(mappingId);
-      if (!mapping) return;
-
-      if (mapping.SOURCE_NAME && mapping.SOURCE_NAME.trim() !== "") {
-        sourceSet.add(mapping.SOURCE_NAME.trim());
-      }
-
-      if (mapping.TARGET_NAME && mapping.TARGET_NAME.trim() !== "") {
-        targetSet.add(mapping.TARGET_NAME.trim());
-      }
+    relatedRecords.forEach(rec => {
+      if (rec.SRC_TABLE_NM) sourceSet.add(rec.SRC_TABLE_NM.trim());
+      if (rec.TGT_TABLE_NM) targetSet.add(rec.TGT_TABLE_NM.trim());
+      if (rec.SESSION_NM) sessionSet.add(rec.SESSION_NM.trim());
+      if (rec.TGT_LOAD_TP_NM) loadTypes.add(rec.TGT_LOAD_TP_NM.trim());
     });
 
     return {
+      // Original master metadata
       workflow: wf,
+
+      // Schedule logic (for RRule generation)
       schedule: scheduleMap.get(String(wf.SCHEDULER_ID)) || null,
 
+      // Detailed Lineage for the Details Panel
       Sources: Array.from(sourceSet).sort().join(", "),
-      Targets: Array.from(targetSet).sort().join(", ")
+      Targets: Array.from(targetSet).sort().join(", "),
+      Sessions: Array.from(sessionSet).sort(), // Array for list rendering
+      LoadTypes: Array.from(loadTypes).sort().join(", "),
+
+      // Keep the raw records in case we want to show a session-specific table in the panel later
+      rawDetails: relatedRecords
     };
   });
 }

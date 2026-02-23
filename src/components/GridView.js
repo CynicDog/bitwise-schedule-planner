@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"; // Added useState, useEffect
+import { useState, useEffect } from "react";
 import ScheduleCanvas from "./ScheduleCanvas";
 
 const GridView = ({
@@ -14,7 +14,6 @@ const GridView = ({
                   }) => {
     const [isRendering, setIsRendering] = useState(false);
 
-    // Trigger loading state when major dependencies change
     useEffect(() => {
         setIsRendering(true);
     }, [view, timeline, workflowList]);
@@ -38,18 +37,27 @@ const GridView = ({
         };
     };
 
+    const handleRowClick = (index) => {
+        // Toggle selection: if clicking the same one, close the panel
+        if (selectedIndex === index) {
+            setSelectedIndex(null);
+        } else {
+            setSelectedIndex(index);
+        }
+    };
+
     return (
         <div
             style={{
                 overflow: "auto",
-                maxHeight: "95vh",
+                height: "calc(100vh - 120px)", // Adjusted for standard viewport
                 border: `1px solid ${theme.border}`,
                 backgroundColor: theme.cardBg,
                 position: "relative",
-                borderRadius: "8px"
+                borderRadius: "8px",
+                flex: 1 // Allow it to grow/shrink in the App.js flex container
             }}
         >
-            {/* SPINNER OVERLAY */}
             {isRendering && (
                 <div style={{
                     position: "absolute",
@@ -106,7 +114,7 @@ const GridView = ({
                     {workflowList.map((wf, i) => (
                         <div
                             key={wf}
-                            onClick={() => setSelectedIndex(i)}
+                            onClick={() => handleRowClick(i)}
                             style={{
                                 width: theme.workflowWidth,
                                 height: theme.rowHeight,
@@ -122,6 +130,7 @@ const GridView = ({
                                 textOverflow: "ellipsis",
                                 boxSizing: "border-box",
                                 cursor: "pointer",
+                                transition: "all 0.2s ease",
                                 borderLeft: selectedIndex === i ? `4px solid ${theme.primary}` : "none"
                             }}
                         >
@@ -132,7 +141,6 @@ const GridView = ({
 
                 {/* RIGHT GRID */}
                 <div style={{ position: "relative", alignSelf: "flex-start" }}>
-                    {/* TIMELINE HEADER */}
                     <div style={{
                         display: "flex",
                         position: "sticky",
@@ -142,28 +150,13 @@ const GridView = ({
                         borderBottom: `1px solid ${theme.border}`
                     }}>
                         {timeline.map((slot, i) => {
-
                             const { month, day, hour, minute } = getParts(slot);
-
                             const isMidnight = hour === 0 && minute === 0;
-                            const isFirstOfMonth = day === 1;
 
                             let label;
-
-                            if (view === "30min") {
-                                label = `${pad(hour)}:${pad(minute)}`;
-                            }
-                            else if (view === "hour") {
-                                label = `${pad(hour)}:00`;
-                            }
-                            else if (view === "day" || view === "week") {
-                                label = `${month}/${day}`;
-                            }
-                            else if (view === "month") {
-                                label = `${month}/${day}`;
-                            }
-
-                            const dateMarker = `${month}/${day}`;
+                            if (view === "30min") label = `${pad(hour)}:${pad(minute)}`;
+                            else if (view === "hour") label = `${pad(hour)}:00`;
+                            else label = `${month}/${day}`;
 
                             return (
                                 <div key={i} style={{
@@ -175,21 +168,16 @@ const GridView = ({
                                     boxSizing: "border-box"
                                 }}>
                                     {isTimeView && isMidnight && (
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                top: "3px",
-                                                left: "50%",
-                                                transform: "translateX(-50%)",
-                                                fontSize: "10px",
-                                                fontWeight: 700,
-                                                color: theme.primary,
-                                                whiteSpace: "nowrap",
-                                                pointerEvents: "none"
-                                            }}
-                                        >
-                                            {dateMarker}
-                                        </div>
+                                        <div style={{
+                                            position: "absolute",
+                                            top: "3px",
+                                            left: "50%",
+                                            transform: "translateX(-50%)",
+                                            fontSize: "10px",
+                                            fontWeight: 700,
+                                            color: theme.primary,
+                                            whiteSpace: "nowrap"
+                                        }}>{month}/${day}</div>
                                     )}
                                     <div style={{
                                         position: "absolute",

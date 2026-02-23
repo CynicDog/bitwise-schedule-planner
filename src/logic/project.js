@@ -4,20 +4,18 @@ import { convertToRRule } from "./define";
 /**
  * Simulate workflow runs inside a time window.
  *
- * @param {Array} joined
+ * @param {Array} joined - The enriched workflows from joinRepository
  * @param {Date | string} from
  * @param {Date | string} until
  */
 export function projectRuns(joined, from, until) {
-
     const results = [];
-
     const windowStart = from instanceof Date ? from : new Date(from);
     const windowEnd = until instanceof Date ? until : new Date(until);
-
     windowEnd.setMilliseconds(999);
 
-    joined.forEach(({ workflow, schedule }) => {
+    joined.forEach((enrichedWf) => {
+        const { workflow, schedule, Sources, Targets, LoadTypes } = enrichedWf;
 
         const ruleData = convertToRRule(workflow, schedule);
         if (!ruleData) return;
@@ -28,17 +26,8 @@ export function projectRuns(joined, from, until) {
 
         const ruleConfig = { ...ruleData };
 
-        /**
-         * END_OPTIONS
-         * 0 → until END_TIME
-         * 1 → limit by RUN_COUNT
-         * 2 → infinite (we restrict by windowEnd)
-         */
-
         if (endOptions === 0 && endTimeRaw) {
-            const [m, d, y, h, mi] =
-                endTimeRaw.split("/").map(Number);
-
+            const [m, d, y, h, mi] = endTimeRaw.split("/").map(Number);
             ruleConfig.until = new Date(y, m - 1, d, h, mi, 0);
         }
 
@@ -52,6 +41,7 @@ export function projectRuns(joined, from, until) {
 
         const rule = new RRule(ruleConfig);
         const frequencyText = new RRule(ruleData).toText();
+
         const occurrences = rule.between(
             windowStart,
             windowEnd,
@@ -65,7 +55,11 @@ export function projectRuns(joined, from, until) {
                 subject: workflow.SUBJECT_AREA,
                 schedulerId: workflow.SCHEDULER_ID,
                 runTime: date,
-                frequency: frequencyText
+                frequency: frequencyText,
+
+                sources: Sources,
+                targets: Targets,
+                loadTypes: LoadTypes
             });
         });
     });
