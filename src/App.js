@@ -8,6 +8,7 @@ import Controls from "./components/Controls";
 import GridView from "./components/GridView";
 import TableView from "./components/TableView";
 import DetailsPanel from "./components/DetailsPanel";
+import SchemasView from "./components/SchemasView"; // <--- Import this once created
 
 const getTheme = (isDark) => ({
     primary: "#6366F1",
@@ -31,7 +32,7 @@ function App() {
     const [runs, setRuns] = useState([]);
     const [joined, setJoined] = useState([]);
     const [view, setView] = useState("hour");
-//    const [mode, setMode] = useState("grid");
+    const [mode, setMode] = useState("grid"); // New view mode state
     const [selectedIndex, setSelectedIndex] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -40,7 +41,7 @@ function App() {
     const [tableSearch, setTableSearch] = useState("");
 
     /* --------------------------------------------------
-       WINDOW MGMT
+        WINDOW MGMT
     -------------------------------------------------- */
     useEffect(() => {
         const now = new Date();
@@ -60,13 +61,12 @@ function App() {
     }, [view]);
 
     /* --------------------------------------------------
-       INITIAL LOAD
+        INITIAL LOAD
     -------------------------------------------------- */
     useEffect(() => {
         async function init() {
             try {
                 const repo = await loadRepository();
-                // This now uses the V_IFM_MT_INTG_INFO.csv logic
                 const joinedData = joinRepository(repo);
                 setJoined(joinedData);
             } catch (e) {
@@ -93,7 +93,7 @@ function App() {
     }, [from, until, view]);
 
     /* --------------------------------------------------
-       FILTERING & PROJECTION
+        FILTERING & PROJECTION
     -------------------------------------------------- */
     const filteredWorkflows = useMemo(() => {
         if (!tableSearch.trim()) return joined;
@@ -111,13 +111,12 @@ function App() {
             setRuns([]);
             return;
         }
-        // projectRuns calculates the execution dots
         const projected = projectRuns(filteredWorkflows, normalizedRange.start, normalizedRange.end);
         setRuns(projected);
     }, [filteredWorkflows, normalizedRange]);
 
     /* --------------------------------------------------
-       GRID DATA PREP
+        GRID DATA PREP
     -------------------------------------------------- */
     const timeline = useMemo(() => {
         const slots = [];
@@ -168,9 +167,7 @@ function App() {
 
     const selectedWorkflowRuns = useMemo(() => {
         if (selectedIndex === null || !workflowList[selectedIndex]) return [];
-
         const selectedName = workflowList[selectedIndex];
-
         return runs
             .filter(r => r.workflow === selectedName)
             .sort((a, b) => new Date(a.runTime) - new Date(b.runTime));
@@ -186,7 +183,7 @@ function App() {
         <div style={{ backgroundColor: theme.bg, minHeight: "100vh", padding: "20px", color: theme.textMain, fontFamily: "Inter, sans-serif" }}>
             <Controls
                 isDark={isDark} setIsDark={setIsDark}
-//                mode={mode} setMode={setMode}
+                mode={mode} setMode={setMode}
                 view={view} setView={setView}
                 from={from} setFrom={setFrom}
                 until={until} setUntil={setUntil}
@@ -195,14 +192,13 @@ function App() {
             />
 
             <div style={{ display: "flex", gap: "20px", width: "100%", alignItems: "flex-start" }}>
-                {/* 9/12 Column System (Left Side) */}
                 <div style={{
                     flex: selectedIndex !== null ? 9 : 12,
                     transition: "flex 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
                     minWidth: 0,
                     overflow: "hidden"
                 }}>
-                    {true ? (
+                    {mode === "grid" ? (
                         <GridView
                             theme={theme} isDark={isDark}
                             workflowList={workflowList}
@@ -214,11 +210,18 @@ function App() {
                             setSelectedIndex={setSelectedIndex}
                         />
                     ) : (
-                        <></>
+                        <SchemasView
+                            data={filteredWorkflows}
+                            theme={theme}
+                            isDark={isDark}
+                            onSelectWorkflow={(wf) => {
+                                const idx = workflowList.indexOf(wf.workflow.WORKFLOW_NAME);
+                                if (idx !== -1) setSelectedIndex(idx);
+                            }}
+                        />
                     )}
                 </div>
 
-                {/* 3/12 Column System (Right Side Details) */}
                 {selectedIndex !== null && (
                     <div style={{
                         flex: 3,
@@ -229,20 +232,20 @@ function App() {
                         animation: "slideIn 0.3s ease-out",
                         display: "flex",
                         flexDirection: "column",
-                        gap: "20px"
+                        gap: "16px"
                     }}>
                         <DetailsPanel
                             data={selectedWorkflowData}
                             theme={theme}
                             isDark={isDark}
-                            onClose={() => setSelectedIndex(null)}
                         />
+
                         <TableView
                             runs={selectedWorkflowRuns}
                             subjectColors={subjectColors}
                             theme={theme}
+                            isDark={isDark}
                         />
-
                     </div>
                 )}
             </div>

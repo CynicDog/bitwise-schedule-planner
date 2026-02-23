@@ -2,7 +2,7 @@ import React from "react";
 import { RRule } from "rrule";
 import { convertToRRule } from "../logic/define";
 
-const DetailsPanel = ({ data, theme, isDark, onClose }) => {
+const DetailsPanel = ({ data, theme, isDark }) => {
     if (!data) return null;
 
     const { workflow, schedule, Sources, Targets, LoadTypes } = data;
@@ -101,30 +101,6 @@ const DetailsPanel = ({ data, theme, isDark, onClose }) => {
                         Schedule: <span style={{ color: theme.primary, fontWeight: 600 }}>{getFrequencyText()}</span>
                     </div>
                 </div>
-
-                <button
-                    onClick={onClose}
-                    style={{
-                        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                        border: "none",
-                        color: theme.textMuted,
-                        cursor: "pointer",
-                        fontSize: "20px",
-                        lineHeight: "28px",
-                        width: "32px",
-                        height: "32px",
-                        borderRadius: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0, // Never let the button get squished
-                        transition: "all 0.2s"
-                    }}
-                    onMouseOver={(e) => e.target.style.background = theme.highlightBg}
-                    onMouseOut={(e) => e.target.style.background = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}
-                >
-                    ×
-                </button>
             </div>
 
             {/* Scrollable Content stays the same */}

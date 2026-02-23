@@ -27,12 +27,11 @@ const Controls = ({
         isFrom ? setFrom(newDate) : setUntil(newDate);
     };
 
-    // --- UPDATED STYLES FOR RESPONSIVENESS ---
     const containerStyle = {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        flexWrap: "wrap", // <--- Key fix: allows wrapping to next line
+        flexWrap: "wrap",
         gap: "12px",
         marginBottom: "20px",
         background: theme.cardBg,
@@ -44,9 +43,9 @@ const Controls = ({
     const groupStyle = {
         display: "flex",
         alignItems: "center",
-        flexWrap: "wrap", // <--- Allow inner groups to wrap on tiny screens
+        flexWrap: "wrap",
         gap: "8px",
-        flex: "1 1 auto" // Allows the search group to grow
+        flex: "1 1 auto"
     };
 
     const panelStyle = {
@@ -59,7 +58,7 @@ const Controls = ({
     };
 
     const btn = (active) => ({
-        padding: "5px 10px",
+        padding: "5px 12px",
         fontSize: "12px",
         fontWeight: 600,
         borderRadius: "6px",
@@ -82,13 +81,14 @@ const Controls = ({
 
     return (
         <div style={containerStyle}>
-            {/* Left Section: View Modes and Search */}
             <div style={groupStyle}>
+                {/* Switch between Grid and Schemas */}
                 <div style={panelStyle}>
-                    <button style={btn(mode === "grid")} onClick={() => setMode("grid")}>Grid</button>
-                    <button style={btn(mode === "table")} onClick={() => setMode("table")}>Table</button>
+                    <button style={btn(mode === "grid")} onClick={() => setMode("grid")}>Timeline</button>
+                    <button style={btn(mode === "schemas")} onClick={() => setMode("schemas")}>Lineage</button>
                 </div>
 
+                {/* Only show time intervals in Grid mode */}
                 {mode === "grid" && (
                     <div style={{...panelStyle, overflowX: "auto"}}>
                         {["30min", "hour", "day", "week", "month"].map(v => (
@@ -101,7 +101,7 @@ const Controls = ({
                     <span style={{ marginRight: "6px", opacity: 0.6 }}>🔍</span>
                     <input
                         style={{ ...inputStyle, width: "100%" }}
-                        placeholder="Search..."
+                        placeholder={mode === "schemas" ? "Search schemas or tables..." : "Search workflows..."}
                         value={localSearch}
                         onChange={e => setLocalSearch(e.target.value)}
                     />
@@ -109,7 +109,6 @@ const Controls = ({
                 </div>
             </div>
 
-            {/* Right Section: Dates and Theme */}
             <div style={{...groupStyle, flex: "0 1 auto", justifyContent: "flex-end"}}>
                 <div style={{ ...panelStyle, padding: "5px 10px", gap: "10px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
