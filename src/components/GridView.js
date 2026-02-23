@@ -177,7 +177,7 @@ const GridView = ({
                                             fontWeight: 700,
                                             color: theme.primary,
                                             whiteSpace: "nowrap"
-                                        }}>{month}/${day}</div>
+                                        }}>{month}/{day}</div>
                                     )}
                                     <div style={{
                                         position: "absolute",
