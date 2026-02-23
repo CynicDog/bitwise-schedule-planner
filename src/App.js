@@ -31,7 +31,7 @@ function App() {
     const [runs, setRuns] = useState([]);
     const [joined, setJoined] = useState([]);
     const [view, setView] = useState("hour");
-    const [mode, setMode] = useState("grid");
+//    const [mode, setMode] = useState("grid");
     const [selectedIndex, setSelectedIndex] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -160,15 +160,21 @@ function App() {
         return map;
     }, [runs]);
 
-    /* --------------------------------------------------
-       DETAILS PANEL SELECTION
-    -------------------------------------------------- */
     const selectedWorkflowData = useMemo(() => {
         if (selectedIndex === null || !workflowList[selectedIndex]) return null;
         const name = workflowList[selectedIndex];
-        // We find the enriched record from the 'joined' pool
         return joined.find(j => j.workflow.WORKFLOW_NAME === name);
     }, [selectedIndex, workflowList, joined]);
+
+    const selectedWorkflowRuns = useMemo(() => {
+        if (selectedIndex === null || !workflowList[selectedIndex]) return [];
+
+        const selectedName = workflowList[selectedIndex];
+
+        return runs
+            .filter(r => r.workflow === selectedName)
+            .sort((a, b) => new Date(a.runTime) - new Date(b.runTime));
+    }, [selectedIndex, workflowList, runs]);
 
     if (loading) return (
         <div style={{ padding: 40, color: theme.textMain, background: theme.bg, minHeight: "100vh" }}>
@@ -180,7 +186,7 @@ function App() {
         <div style={{ backgroundColor: theme.bg, minHeight: "100vh", padding: "20px", color: theme.textMain, fontFamily: "Inter, sans-serif" }}>
             <Controls
                 isDark={isDark} setIsDark={setIsDark}
-                mode={mode} setMode={setMode}
+//                mode={mode} setMode={setMode}
                 view={view} setView={setView}
                 from={from} setFrom={setFrom}
                 until={until} setUntil={setUntil}
@@ -196,7 +202,7 @@ function App() {
                     minWidth: 0,
                     overflow: "hidden"
                 }}>
-                    {mode === "grid" ? (
+                    {true ? (
                         <GridView
                             theme={theme} isDark={isDark}
                             workflowList={workflowList}
@@ -208,14 +214,7 @@ function App() {
                             setSelectedIndex={setSelectedIndex}
                         />
                     ) : (
-                        <TableView
-                            runs={runs}
-                            workflowList={workflowList}
-                            selectedIndex={selectedIndex}
-                            setSelectedIndex={setSelectedIndex}
-                            subjectColors={subjectColors}
-                            theme={theme}
-                        />
+                        <></>
                     )}
                 </div>
 
@@ -227,7 +226,10 @@ function App() {
                         position: "sticky",
                         top: "20px",
                         maxHeight: "calc(100vh - 40px)",
-                        animation: "slideIn 0.3s ease-out"
+                        animation: "slideIn 0.3s ease-out",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "20px"
                     }}>
                         <DetailsPanel
                             data={selectedWorkflowData}
@@ -235,6 +237,12 @@ function App() {
                             isDark={isDark}
                             onClose={() => setSelectedIndex(null)}
                         />
+                        <TableView
+                            runs={selectedWorkflowRuns}
+                            subjectColors={subjectColors}
+                            theme={theme}
+                        />
+
                     </div>
                 )}
             </div>
