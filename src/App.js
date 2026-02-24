@@ -6,13 +6,12 @@ import { projectRuns } from "./logic/project";
 // Components
 import Controls from "./components/Controls";
 import GridView from "./components/GridView";
-import TableView from "./components/TableView";
-import DetailsPanel from "./components/DetailsPanel";
-import SchemasView from "./components/SchemasView"; // <--- Import this once created
+import DetailsPanel from "./components/DetailsPanel"; // Unified panel
+import SchemasView from "./components/SchemasView";
 
 const getTheme = (isDark) => ({
-    primary: "#6366F1",
-    highlightBg: isDark ? "rgba(99, 102, 241, 0.2)" : "rgba(99, 102, 241, 0.1)",
+    primary: "#0090DA",
+    highlightBg: isDark ? "rgba(0, 144, 218, 0.2)" : "rgba(0, 144, 218, 0.08)",
     bg: isDark ? "#0F172A" : "#F8FAFC",
     cardBg: isDark ? "#1E293B" : "#FFFFFF",
     headerBg: isDark ? "#334155" : "#F1F5F9",
@@ -32,22 +31,26 @@ function App() {
     const [runs, setRuns] = useState([]);
     const [joined, setJoined] = useState([]);
     const [view, setView] = useState("hour");
-    const [mode, setMode] = useState("grid"); // New view mode state
-    const [selectedIndex, setSelectedIndex] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [mode, setMode] = useState("grid");
 
+    // Selection State
+    const [selectedIndex, setSelectedIndex] = useState(null);
+    const [selectedRunIndex, setSelectedRunIndex] = useState(null); // Added this
+
+    const [loading, setLoading] = useState(true);
     const [from, setFrom] = useState(new Date());
     const [until, setUntil] = useState(new Date());
     const [tableSearch, setTableSearch] = useState("");
 
-    /* --------------------------------------------------
-        WINDOW MGMT
-    -------------------------------------------------- */
+    // Reset run selection when the workflow changes
+    useEffect(() => {
+        setSelectedRunIndex(null);
+    }, [selectedIndex]);
+
     useEffect(() => {
         const now = new Date();
         const start = new Date(now);
         const end = new Date(now);
-
         switch (view) {
             case "30min": end.setMinutes(end.getMinutes() + 1800); break;
             case "hour": end.setHours(end.getHours() + 23); break;
@@ -60,29 +63,21 @@ function App() {
         setUntil(end);
     }, [view]);
 
-    /* --------------------------------------------------
-        INITIAL LOAD
-    -------------------------------------------------- */
     useEffect(() => {
         async function init() {
             try {
                 const repo = await loadRepository();
                 const joinedData = joinRepository(repo);
                 setJoined(joinedData);
-            } catch (e) {
-                console.error("Initialization error:", e);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); } finally { setLoading(false); }
         }
         init();
     }, []);
 
     const normalizedRange = useMemo(() => {
-        const nFrom = new Date(from);
-        nFrom.setSeconds(0, 0);
+        const nFrom = new Date(from); nFrom.setSeconds(0, 0);
         const nUntil = new Date(until);
-        if (view === "day" || view === "week" || view === "month") {
+        if (["day", "week", "month"].includes(view)) {
             nFrom.setHours(0, 0, 0, 0);
             nUntil.setHours(23, 59, 59, 999);
         } else {
@@ -92,38 +87,24 @@ function App() {
         return { start: nFrom, end: nUntil };
     }, [from, until, view]);
 
-    /* --------------------------------------------------
-        FILTERING & PROJECTION
-    -------------------------------------------------- */
     const filteredWorkflows = useMemo(() => {
         if (!tableSearch.trim()) return joined;
         const term = tableSearch.toLowerCase();
-        return joined.filter(wf => {
-            const workflowName = (wf.workflow?.WORKFLOW_NAME || "").toLowerCase();
-            const sources = (wf.Sources || "").toLowerCase();
-            const targets = (wf.Targets || "").toLowerCase();
-            return workflowName.includes(term) || sources.includes(term) || targets.includes(term);
-        });
+        return joined.filter(wf =>
+            (wf.workflow?.WORKFLOW_NAME || "").toLowerCase().includes(term) ||
+            (wf.Sources || "").toLowerCase().includes(term) ||
+            (wf.Targets || "").toLowerCase().includes(term)
+        );
     }, [joined, tableSearch]);
 
     useEffect(() => {
-        if (!filteredWorkflows.length) {
-            setRuns([]);
-            return;
-        }
-        const projected = projectRuns(filteredWorkflows, normalizedRange.start, normalizedRange.end);
-        setRuns(projected);
+        if (!filteredWorkflows.length) { setRuns([]); return; }
+        setRuns(projectRuns(filteredWorkflows, normalizedRange.start, normalizedRange.end));
     }, [filteredWorkflows, normalizedRange]);
 
-    /* --------------------------------------------------
-        GRID DATA PREP
-    -------------------------------------------------- */
     const timeline = useMemo(() => {
         const slots = [];
         const cursor = new Date(normalizedRange.start);
-        if (view === "30min") cursor.setMinutes(Math.floor(cursor.getMinutes() / 30) * 30);
-        else if (view === "hour") cursor.setMinutes(0);
-
         while (cursor <= normalizedRange.end) {
             slots.push(new Date(cursor));
             if (view === "30min") cursor.setMinutes(cursor.getMinutes() + 30);
@@ -136,9 +117,7 @@ function App() {
         return slots;
     }, [normalizedRange, view]);
 
-    const workflowList = useMemo(() => {
-        return [...new Set(runs.map(r => r.workflow))].sort();
-    }, [runs]);
+    const workflowList = useMemo(() => [...new Set(runs.map(r => r.workflow))].sort(), [runs]);
 
     const grouped = useMemo(() => {
         const map = {};
@@ -161,42 +140,40 @@ function App() {
 
     const selectedWorkflowData = useMemo(() => {
         if (selectedIndex === null || !workflowList[selectedIndex]) return null;
-        const name = workflowList[selectedIndex];
-        return joined.find(j => j.workflow.WORKFLOW_NAME === name);
+        return joined.find(j => j.workflow.WORKFLOW_NAME === workflowList[selectedIndex]);
     }, [selectedIndex, workflowList, joined]);
 
     const selectedWorkflowRuns = useMemo(() => {
         if (selectedIndex === null || !workflowList[selectedIndex]) return [];
-        const selectedName = workflowList[selectedIndex];
         return runs
-            .filter(r => r.workflow === selectedName)
+            .filter(r => r.workflow === workflowList[selectedIndex])
             .sort((a, b) => new Date(a.runTime) - new Date(b.runTime));
     }, [selectedIndex, workflowList, runs]);
 
-    if (loading) return (
-        <div style={{ padding: 40, color: theme.textMain, background: theme.bg, minHeight: "100vh" }}>
-            Loading Informatics Metadata Repository...
-        </div>
-    );
+    if (loading) return <div style={{ padding: 40, color: theme.textMain, background: theme.bg, minHeight: "100vh" }}>Loading...</div>;
 
     return (
-        <div style={{ backgroundColor: theme.bg, minHeight: "100vh", padding: "20px", color: theme.textMain, fontFamily: "Inter, sans-serif" }}>
-            <Controls
-                isDark={isDark} setIsDark={setIsDark}
-                mode={mode} setMode={setMode}
-                view={view} setView={setView}
-                from={from} setFrom={setFrom}
-                until={until} setUntil={setUntil}
-                theme={theme} workflowCount={filteredWorkflows.length}
-                tableSearch={tableSearch} setTableSearch={setTableSearch}
-            />
+        <div style={{ backgroundColor: theme.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "20px", flexShrink: 0 }}>
+                <Controls
+                    isDark={isDark} setIsDark={setIsDark}
+                    mode={mode} setMode={setMode}
+                    view={view} setView={setView}
+                    from={from} setFrom={setFrom}
+                    until={until} setUntil={setUntil}
+                    theme={theme} workflowCount={filteredWorkflows.length}
+                    tableSearch={tableSearch} setTableSearch={setTableSearch}
+                />
+            </div>
 
-            <div style={{ display: "flex", gap: "20px", width: "100%", alignItems: "flex-start" }}>
+            <div style={{ display: "flex", gap: "20px", flex: 1, padding: "0 20px 20px 20px", minHeight: 0, overflow: "hidden" }}>
                 <div style={{
                     flex: selectedIndex !== null ? 9 : 12,
-                    transition: "flex 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                    minWidth: 0,
-                    overflow: "hidden"
+                    transition: "flex 0.4s ease",
+                    overflowY: "auto",
+                    height: "100%",
+                    borderRadius: "8px",
+                    border: `1px solid ${theme.border}`
                 }}>
                     {mode === "grid" ? (
                         <GridView
@@ -222,40 +199,20 @@ function App() {
                     )}
                 </div>
 
-                {selectedIndex !== null && (
-                    <div style={{
-                        flex: 3,
-                        minWidth: "350px",
-                        position: "sticky",
-                        top: "20px",
-                        maxHeight: "calc(100vh - 40px)",
-                        animation: "slideIn 0.3s ease-out",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "16px"
-                    }}>
-                        <DetailsPanel
-                            data={selectedWorkflowData}
-                            theme={theme}
-                            isDark={isDark}
-                        />
-
-                        <TableView
-                            runs={selectedWorkflowRuns}
-                            subjectColors={subjectColors}
-                            theme={theme}
-                            isDark={isDark}
-                        />
-                    </div>
-                )}
+               {selectedIndex !== null && (
+                   <div style={{ flex: 3, minWidth: "350px", height: "100%" }}>
+                       <DetailsPanel
+                           data={selectedWorkflowData}
+                           runs={selectedWorkflowRuns}
+                           theme={theme}
+                           isDark={isDark}
+                           selectedRunIndex={selectedRunIndex}
+                           onSelectRun={setSelectedRunIndex}
+                           onClose={() => setSelectedIndex(null)}
+                       />
+                   </div>
+               )}
             </div>
-
-            <style>{`
-                @keyframes slideIn {
-                    from { opacity: 0; transform: translateX(30px); }
-                    to { opacity: 1; transform: translateX(0); }
-                }
-            `}</style>
         </div>
     );
 }

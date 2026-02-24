@@ -1,148 +1,170 @@
 import React, { useMemo, useState } from "react";
 
 const SchemasView = ({ data, theme, isDark, onSelectWorkflow }) => {
-    const [selectedSrc, setSelectedSrc] = useState(null);
-    const [selectedTgt, setSelectedTgt] = useState(null);
+    const [activeDBs, setActiveDBs] = useState([]);
+    const [activeSchemas, setActiveSchemas] = useState([]);
 
-    // 1. Extract Unique Schemas for the Master Area
-    const { srcSchemas, tgtSchemas } = useMemo(() => {
-        const srcs = new Set();
-        const tgts = new Set();
+    // Map out the full hierarchy: { DB_NAME: Set([SCHEMA_1, SCHEMA_2]) }
+    const { hierarchy, allUniqueSchemas } = useMemo(() => {
+        const hMap = {};
+        const sSet = new Set();
         data.forEach(wf => {
-            wf.rawDetails.forEach(d => {
-                if (d.SRC_SCHEMA_NM) srcs.add(d.SRC_SCHEMA_NM);
-                if (d.TGT_SCHEMA_NM) tgts.add(d.TGT_SCHEMA_NM);
-            });
-        });
-        return {
-            srcSchemas: Array.from(srcs).sort(),
-            tgtSchemas: Array.from(tgts).sort()
-        };
-    }, [data]);
-
-    // 2. Filter the lineage list based on selection
-    const filteredLineage = useMemo(() => {
-        const flows = [];
-        data.forEach(wf => {
-            wf.rawDetails.forEach(detail => {
-                const matchSrc = !selectedSrc || detail.SRC_SCHEMA_NM === selectedSrc;
-                const matchTgt = !selectedTgt || detail.TGT_SCHEMA_NM === selectedTgt;
-
-                if (matchSrc && matchTgt) {
-                    flows.push({
-                        id: `${wf.workflow.WORKFLOW_ID}_${detail.SESSION_ID}_${detail.SRC_TABLE_NM}_${detail.TGT_TABLE_NM}`,
-                        workflowName: wf.workflow.WORKFLOW_NAME,
-                        fullWf: wf,
-                        srcSchema: detail.SRC_SCHEMA_NM || "N/A",
-                        srcTable: detail.SRC_TABLE_NM || "N/A",
-                        tgtSchema: detail.TGT_SCHEMA_NM || "N/A",
-                        tgtTable: detail.TGT_TABLE_NM || "N/A",
-                        loadType: detail.TGT_LOAD_TP_NM,
-                        session: detail.SESSION_NM,
-                        subjectArea: wf.workflow.SUBJECT_AREA
-                    });
+            wf.rawDetails?.forEach(detail => {
+                const db = detail.TGT_DB_NM || 'DB';
+                const schema = detail.TGT_SCHEMA_NM;
+                if (!hMap[db]) hMap[db] = new Set();
+                if (schema) {
+                    hMap[db].add(schema);
+                    sSet.add(schema);
                 }
             });
         });
-        return flows;
-    }, [data, selectedSrc, selectedTgt]);
+        return {
+            hierarchy: hMap,
+            allUniqueSchemas: Array.from(sSet).sort()
+        };
+    }, [data]);
 
-    // --- STYLES ---
-    const chipStyle = (active, isSource) => ({
-        padding: "6px 12px",
-        borderRadius: "20px",
-        fontSize: "11px",
-        fontWeight: "700",
-        cursor: "pointer",
-        border: `1px solid ${active ? theme.primary : theme.border}`,
-        background: active ? theme.primary : (isDark ? "#ffffff05" : "#fff"),
-        color: active ? "#fff" : theme.textMain,
-        transition: "all 0.2s",
-        whiteSpace: "nowrap"
-    });
+    const allDBs = useMemo(() => Object.keys(hierarchy).sort(), [hierarchy]);
 
-    const flowCardStyle = {
-        background: theme.cardBg,
-        border: `1px solid ${theme.border}`,
-        borderRadius: "10px",
-        padding: "14px",
-        display: "grid",
-        gridTemplateColumns: "1fr 30px 1fr 1.2fr",
-        alignItems: "center",
-        gap: "20px",
-        marginBottom: "10px",
-        cursor: "pointer"
+    // Determine which schemas are valid based on selected DBs
+    const validSchemasForSelectedDBs = useMemo(() => {
+        if (activeDBs.length === 0) return allUniqueSchemas;
+        const valid = new Set();
+        activeDBs.forEach(db => {
+            hierarchy[db]?.forEach(s => valid.add(s));
+        });
+        return Array.from(valid);
+    }, [hierarchy, activeDBs, allUniqueSchemas]);
+
+    const groupedLineage = useMemo(() => {
+        const targetMap = {};
+        data.forEach(wf => {
+            wf.rawDetails?.forEach(detail => {
+                const db = detail.TGT_DB_NM || 'DB';
+                const schema = detail.TGT_SCHEMA_NM;
+
+                if (activeDBs.length > 0 && !activeDBs.includes(db)) return;
+                if (activeSchemas.length > 0 && !activeSchemas.includes(schema)) return;
+
+                const tgtKey = `${db}.${schema}.${detail.TGT_TABLE_NM}`;
+                if (!targetMap[tgtKey]) {
+                    targetMap[tgtKey] = { db, schema, table: detail.TGT_TABLE_NM, workflows: {} };
+                }
+
+                const wfName = wf.workflow.WORKFLOW_NAME;
+                if (!targetMap[tgtKey].workflows[wfName]) {
+                    targetMap[tgtKey].workflows[wfName] = { fullWf: wf, sources: [] };
+                }
+                targetMap[tgtKey].workflows[wfName].sources.push({
+                    srcSchema: detail.SRC_SCHEMA_NM,
+                    srcTable: detail.SRC_TABLE_NM,
+                    loadType: detail.TGT_LOAD_TP_NM
+                });
+            });
+        });
+        return Object.values(targetMap);
+    }, [data, activeDBs, activeSchemas]);
+
+    const toggleDB = (db) => {
+        setActiveDBs(prev => {
+            const next = prev.includes(db) ? prev.filter(d => d !== db) : [...prev, db];
+            return next;
+        });
+        setActiveSchemas(prev => prev.filter(s => {
+            if (activeDBs.length === 1 && activeDBs.includes(db)) return true; // Handling reset
+            return validSchemasForSelectedDBs.includes(s);
+        }));
+    };
+
+    const styles = {
+        container: { display: "flex", flexDirection: "column", gap: "10px", padding: "20px", height: "100%", overflowY: "auto" },
+        filterSection: { marginBottom: "20px", display: "flex", flexDirection: "column", gap: "12px" },
+        chipGroup: { display: "flex", flexWrap: "wrap", gap: "8px" },
+        label: { fontSize: '10px', fontWeight: 800, color: theme.textMuted, letterSpacing: '0.5px', marginBottom: '4px' },
+        chip: (active, disabled) => ({
+            padding: "5px 12px", borderRadius: "18px", fontSize: "11px", fontWeight: "700",
+            cursor: disabled ? "not-allowed" : "pointer",
+            border: `1px solid ${active ? theme.primary : theme.border}`,
+            background: active ? theme.primary : "transparent",
+            color: active ? "#fff" : theme.textMuted,
+            opacity: disabled ? 0.25 : (active ? 1 : 0.7), // Faded if disabled
+            filter: disabled ? "grayscale(1)" : "none",
+            transition: "0.2s all ease",
+            pointerEvents: disabled ? "none" : "auto",
+            userSelect: "none"
+        }),
+        lineageNode: { background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: "12px", marginBottom: "16px", overflow: "hidden" },
+        nodeHeader: { padding: "12px 20px", background: isDark ? "rgba(0, 144, 218, 0.12)" : "rgba(0, 144, 218, 0.04)", borderBottom: `1px solid ${theme.border}` },
+        wfBlock: { display: "grid", gridTemplateColumns: "1fr 200px", borderBottom: `1px solid ${theme.border}44`, alignItems: "stretch", cursor: "pointer" },
+        wfSidebar: { padding: "15px 20px", display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "right", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)", borderLeft: `1px solid ${theme.border}44` }
     };
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
-            {/* MASTER AREA: Schema Selectors */}
-            <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "20px",
-                background: isDark ? "#ffffff03" : "#00000002",
-                padding: "20px",
-                borderRadius: "12px",
-                border: `1px solid ${theme.border}`
-            }}>
-                {/* Source Domains */}
+        <div style={styles.container}>
+            <div style={styles.filterSection}>
                 <div>
-                    <div style={{ fontSize: "10px", fontWeight: "800", color: theme.textMuted, marginBottom: "10px", letterSpacing: "1px" }}>SOURCE SCHEMAS</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        <div style={chipStyle(!selectedSrc, true)} onClick={() => setSelectedSrc(null)}>ALL</div>
-                        {srcSchemas.map(s => (
-                            <div key={s} style={chipStyle(selectedSrc === s, true)} onClick={() => setSelectedSrc(s)}>{s}</div>
+                    <div style={styles.label}>TARGET DATABASE</div>
+                    <div style={styles.chipGroup}>
+                        <div style={styles.chip(activeDBs.length === 0, false)} onClick={() => {setActiveDBs([]); setActiveSchemas([]);}}>ALL</div>
+                        {allDBs.map(db => (
+                            <div key={db} style={styles.chip(activeDBs.includes(db), false)} onClick={() => toggleDB(db)}>{db}</div>
                         ))}
                     </div>
                 </div>
 
-                {/* Target Domains */}
                 <div>
-                    <div style={{ fontSize: "10px", fontWeight: "800", color: theme.textMuted, marginBottom: "10px", letterSpacing: "1px" }}>TARGET SCHEMAS</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        <div style={chipStyle(!selectedTgt, false)} onClick={() => setSelectedTgt(null)}>ALL</div>
-                        {tgtSchemas.map(s => (
-                            <div key={s} style={chipStyle(selectedTgt === s, false)} onClick={() => setSelectedTgt(s)}>{s}</div>
-                        ))}
+                    <div style={styles.label}>TARGET SCHEMA</div>
+                    <div style={styles.chipGroup}>
+                        {allUniqueSchemas.map(s => {
+                            const isDisabled = !validSchemasForSelectedDBs.includes(s);
+                            return (
+                                <div
+                                    key={s}
+                                    style={styles.chip(activeSchemas.includes(s), isDisabled)}
+                                    onClick={() => !isDisabled && setActiveSchemas(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+                                >
+                                    {s}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
 
-            {/* RESULTS AREA */}
-            <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", alignItems: "baseline" }}>
-                    <h3 style={{ margin: 0, fontSize: "16px" }}>Lineage Flows</h3>
-                    <span style={{ fontSize: "12px", opacity: 0.6 }}>Showing {filteredLineage.length} relations</span>
-                </div>
-
-                {filteredLineage.map(flow => (
-                    <div key={flow.id} style={flowCardStyle} onClick={() => onSelectWorkflow(flow.fullWf)}>
-                        {/* Source Detail */}
-                        <div>
-                            <div style={{ fontSize: "9px", fontWeight: 800, color: theme.primary }}>{flow.srcSchema}</div>
-                            <div style={{ fontSize: "13px", fontWeight: 600 }}>{flow.srcTable}</div>
-                        </div>
-
-                        <div style={{ opacity: 0.3 }}>➜</div>
-
-                        {/* Target Detail */}
-                        <div>
-                            <div style={{ fontSize: "9px", fontWeight: 800, color: theme.primary }}>{flow.tgtSchema}</div>
-                            <div style={{ fontSize: "13px", fontWeight: 600 }}>{flow.tgtTable}</div>
-                            <div style={{ fontSize: "10px", color: theme.textMuted }}>{flow.loadType}</div>
-                        </div>
-
-                        {/* Execution Context */}
-                        <div style={{ borderLeft: `1px solid ${theme.border}`, paddingLeft: "20px" }}>
-                            <div style={{ fontSize: "10px", opacity: 0.5, fontWeight: 700 }}>{flow.subjectArea}</div>
-                            <div style={{ fontSize: "12px", fontWeight: 700 }}>{flow.workflowName}</div>
-                            <div style={{ fontSize: "11px", color: theme.textMuted, fontStyle: "italic" }}>{flow.session}</div>
-                        </div>
+            {groupedLineage.map((node) => (
+                <div key={`${node.db}-${node.schema}-${node.table}`} style={styles.lineageNode}>
+                    <div style={styles.nodeHeader}>
+                        <span style={{ fontSize: "9px", fontWeight: 900, color: theme.primary, letterSpacing: "1px" }}>TARGET TABLE</span>
+                        <h3 style={{ margin: 0, fontSize: "14px", color: theme.textMain }}>
+                            <span style={{ opacity: 0.5 }}>{node.db}.{node.schema}.</span>
+                            <span style={{ fontWeight: 800 }}>{node.table}</span>
+                        </h3>
                     </div>
-                ))}
-            </div>
+
+                    {Object.entries(node.workflows).map(([wfName, wfData], idx) => (
+                        <div key={idx} style={styles.wfBlock} onClick={() => onSelectWorkflow(wfData.fullWf)}>
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                {wfData.sources.map((src, sIdx) => (
+                                    <div key={sIdx} style={{ display: "grid", gridTemplateColumns: "1fr 120px", padding: "14px 20px", alignItems: "center", borderBottom: sIdx === wfData.sources.length - 1 ? "none" : `1px solid ${theme.border}15` }}>
+                                        <div style={{ opacity: 0.5 }}>
+                                            <div style={{ fontSize: "9px", fontWeight: 800, color: theme.textMuted }}>{src.srcSchema}</div>
+                                            <div style={{ fontSize: "12px", fontWeight: 700, color: theme.textMain }}>{src.srcTable}</div>
+                                        </div>
+                                        <div style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "10px", background: isDark ? "#334155" : "#F1F5F9", fontWeight: "800", color: theme.textMain, textAlign: "center", width: "100px", border: `1px solid ${theme.border}` }}>
+                                            {src.loadType}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={styles.wfSidebar}>
+                                <div style={{ fontSize: "9px", fontWeight: 800, color: theme.textMuted }}>WORKFLOW</div>
+                                <div style={{ fontSize: "11px", fontWeight: 700, color: theme.primary, wordBreak: "break-all" }}>{wfName}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ))}
         </div>
     );
 };
