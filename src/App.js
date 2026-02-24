@@ -189,6 +189,7 @@ function App() {
                     ) : (
                         <SchemasView
                             data={filteredWorkflows}
+                            searchTerm={tableSearch}
                             theme={theme}
                             isDark={isDark}
                             onSelectWorkflow={(wf) => {
